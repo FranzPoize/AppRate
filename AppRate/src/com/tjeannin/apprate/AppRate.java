@@ -18,6 +18,7 @@ import android.content.pm.PackageManager.NameNotFoundException;
 import android.net.Uri;
 import android.text.format.DateUtils;
 import android.util.Log;
+import android.view.View;
 import android.widget.Toast;
 
 public class AppRate implements android.content.DialogInterface.OnClickListener, OnCancelListener {
@@ -28,6 +29,8 @@ public class AppRate implements android.content.DialogInterface.OnClickListener,
 	private OnClickListener clickListener;
 	private SharedPreferences preferences;
 	private AlertDialog.Builder dialogBuilder = null;
+	private AppRateViewBuilder viewBuilder = null;
+	private AppRateFrameLayout viewHost = null;
 
 	private long minLaunchesUntilPrompt = 0;
 	private long minDaysUntilPrompt = 0;
@@ -85,6 +88,12 @@ public class AppRate implements android.content.DialogInterface.OnClickListener,
 		dialogBuilder = customBuilder;
 		return this;
 	}
+	
+	public AppRate setCustomView(AppRateViewBuilder customBuilder,AppRateFrameLayout host) {
+		viewBuilder = customBuilder;
+		viewHost = host;
+		return this;
+	}
 
 	/**
 	 * Reset all the data collected about number of launches and days until first launch.
@@ -130,6 +139,8 @@ public class AppRate implements android.content.DialogInterface.OnClickListener,
 
 				if (dialogBuilder != null) {
 					showDialog(dialogBuilder);
+				} else if (viewBuilder != null && viewHost != null){
+					createCrouton(viewBuilder,viewHost);
 				} else {
 					showDefaultDialog();
 				}
@@ -200,6 +211,53 @@ public class AppRate implements android.content.DialogInterface.OnClickListener,
 		dialog.setButton(AlertDialog.BUTTON_NEGATIVE, dismiss, this);
 
 		dialog.setOnCancelListener(this);
+	}
+	
+	public void createCrouton(AppRateViewBuilder builder,final AppRateFrameLayout host) {
+		AppRateView rateView = (AppRateView)builder.create().getView();
+		rateView.setOnClickPositive(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View v) {
+				Editor editor = preferences.edit();
+				try
+				{
+					hostActivity.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + hostActivity.getPackageName())));
+				}catch (ActivityNotFoundException e) {
+					Toast.makeText(hostActivity, "No Play Store installed on device", Toast.LENGTH_SHORT).show();
+				}
+				editor.putBoolean(PrefsContract.PREF_DONT_SHOW_AGAIN, true);
+				host.hide();
+				editor.commit();
+				
+			}
+		});
+		
+		rateView.setOnClickNegative(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View v) {
+				Editor editor = preferences.edit();
+				editor.putBoolean(PrefsContract.PREF_DONT_SHOW_AGAIN, true);
+				editor.commit();
+				host.hide();
+			}
+		});
+		
+		rateView.setOnClickNeutral(new View.OnClickListener() {
+			
+			@Override
+			public void onClick(View v) {
+				Editor editor = preferences.edit();
+				editor.putLong(PrefsContract.PREF_DATE_FIRST_LAUNCH, System.currentTimeMillis());
+				editor.putLong(PrefsContract.PREF_LAUNCH_COUNT, 0);
+				editor.commit();
+				host.hide();
+			}
+		});
+		host.addView((View)rateView);
+		
+		host.show();
 	}
 
 	@Override
